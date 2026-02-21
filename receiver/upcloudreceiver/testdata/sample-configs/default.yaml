@@ -1,0 +1,13 @@
+upcloud:
+  collection_interval: 60s
+  initial_delay: 1s
+  api:
+    endpoint: https://api.upcloud.com
+    token: ${env:UPCLOUD_API_TOKEN}
+    timeout: 10s
+  managed_databases:
+    enabled: true
+    uuids: [db-uuid]
+    period: 5m
+  managed_load_balancers:
+    enabled: false

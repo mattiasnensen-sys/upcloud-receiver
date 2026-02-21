@@ -1,0 +1,53 @@
+type: object
+additionalProperties: false
+properties:
+  collection_interval:
+    type: string
+  initial_delay:
+    type: string
+  api:
+    type: object
+    additionalProperties: false
+    properties:
+      endpoint:
+        type: string
+      token:
+        type: string
+      timeout:
+        type: string
+    required: [endpoint, token]
+  managed_databases:
+    type: object
+    additionalProperties: false
+    properties:
+      enabled:
+        type: boolean
+      uuids:
+        type: array
+        items:
+          type: string
+      period:
+        type: string
+      metrics:
+        type: array
+        items:
+          type: string
+  managed_load_balancers:
+    type: object
+    additionalProperties: false
+    properties:
+      enabled:
+        type: boolean
+      uuids:
+        type: array
+        items:
+          type: string
+      period:
+        type: string
+      metrics:
+        type: array
+        items:
+          type: string
+      metrics_path_template:
+        type: string
+required: [api]

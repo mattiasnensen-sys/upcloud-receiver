@@ -1,0 +1,15 @@
+# Build artifacts
+_build/
+bin/
+dist/
+*.test
+*.out
+coverage.txt
+
+# Go
+vendor/
+
+# IDE
+.idea/
+.vscode/
+.DS_Store
