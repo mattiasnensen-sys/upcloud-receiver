@@ -46,6 +46,36 @@ make build-collector
 ./_build/otelcol-upcloud --config ./examples/otelcol-config.yaml
 ```
 
+4. Build a full `otelcol-contrib` distribution with the UpCloud receiver added:
+
+```bash
+make build-collector-contrib OTELCOL_VERSION=0.146.1
+```
+
+5. Build the container image (runtime base: official `otel/opentelemetry-collector-contrib`):
+
+```bash
+docker build --build-arg OTELCOL_VERSION=0.146.1 -t otelcol-contrib-upcloud:local .
+```
+
+## CI
+
+GitHub Actions workflow `.github/workflows/ci.yaml` performs:
+
+- `go mod tidy` and `gofmt` drift checks
+- `go vet`
+- `go test -race -coverprofile`
+- full contrib distribution build via OTel Collector Builder
+- collector config validation check (`validate` subcommand)
+- docker image smoke build (no push)
+
+GitHub Actions workflow `.github/workflows/release-image.yaml` performs:
+
+- trigger on semver tags (`v*.*.*`)
+- re-run lint/test/build/validation gates for release safety
+- publish multi-arch GHCR image
+- apply semver-only image tags (`X.Y.Z`, `X.Y`, `X`)
+
 ## Licensing
 
 Apache-2.0. See `LICENSE`.

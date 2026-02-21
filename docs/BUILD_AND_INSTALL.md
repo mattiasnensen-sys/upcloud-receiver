@@ -34,3 +34,35 @@ This allows local development without publishing tags.
 - Deploy with Helm or Kubernetes manifests
 - Configure receiver block in collector config
 - Roll out with canary deployment and verify metric cardinality and scrape latency
+
+## 6. Full Contrib Distribution
+
+To preserve all components from the official `otelcol-contrib` distribution while adding this receiver:
+
+```bash
+make build-collector-contrib OTELCOL_VERSION=0.146.1
+```
+
+This command:
+
+1. Downloads the upstream contrib manifest for the pinned OTel release
+2. Injects `upcloudreceiver` into the receivers list
+3. Builds `./_build/otelcol-contrib-upcloud` with `ocb`
+
+Container build (official contrib runtime base):
+
+```bash
+docker build --build-arg OTELCOL_VERSION=0.146.1 -t ghcr.io/<owner>/otelcol-contrib-upcloud:local .
+```
+
+## 7. GitHub Actions Pipelines
+
+- `.github/workflows/ci.yaml`
+  - Runs on `pull_request` and `main` pushes
+  - Executes linting, tests, full contrib build, config validation, and docker smoke build
+  - Does not publish images
+
+- `.github/workflows/release-image.yaml`
+  - Runs on semver tags (`v*.*.*`)
+  - Re-runs verification gates, then publishes `linux/amd64` and `linux/arm64` images to GHCR
+  - Uses semver-only image tags: `X.Y.Z`, `X.Y`, `X`
