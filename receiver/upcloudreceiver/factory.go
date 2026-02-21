@@ -52,6 +52,9 @@ func createMetricsReceiver(
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	client := NewHTTPClient(cfg.API, cfg.ManagedLoadBalancers.MetricsPathTemplate)
+	client, err := NewHTTPClient(cfg.API, cfg.ManagedLoadBalancers.MetricsPathTemplate)
+	if err != nil {
+		return nil, err
+	}
 	return newMetricsReceiver(cfg, settings, next, client), nil
 }

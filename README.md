@@ -22,6 +22,8 @@ This repository scaffolds a custom receiver package named `upcloud` and an OpenT
 - Stability target: `alpha`
 - Managed database metrics path and payload parsing: scaffolded and implemented
 - Managed load balancer metrics: scaffolded via provider interface and configurable endpoint template
+- Authentication: bearer token and basic auth, including `_file` credential loading options
+- Metric naming: OpenTelemetry-style names and units with percent-to-ratio normalization for utilization
 
 ## Quick Start
 

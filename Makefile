@@ -4,7 +4,7 @@ GO_BIN := $(shell go env GOPATH)/bin
 .PHONY: fmt test tidy build-collector build-collector-local
 
 fmt:
-	gofmt -w $(shell find . -name '*.go' -type f)
+	gofmt -w $(shell find . -name '*.go' -type f -not -path './_build/*' -not -path './vendor/*')
 
 test:
 	go test ./...

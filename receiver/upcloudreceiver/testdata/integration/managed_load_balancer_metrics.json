@@ -1,0 +1,30 @@
+{
+  "cpu_usage": {
+    "data": {
+      "cols": [
+        {"label": "time", "type": "date"},
+        {"label": "lb-node-1", "type": "number"}
+      ],
+      "rows": [
+        ["2026-02-21T09:30:00Z", 55.0]
+      ]
+    },
+    "hints": {
+      "title": "CPU usage %"
+    }
+  },
+  "backend_connections": {
+    "data": {
+      "cols": [
+        {"label": "time", "type": "date"},
+        {"label": "lb-node-1", "type": "number"}
+      ],
+      "rows": [
+        ["2026-02-21T09:30:00Z", 120]
+      ]
+    },
+    "hints": {
+      "title": "Backend connections"
+    }
+  }
+}

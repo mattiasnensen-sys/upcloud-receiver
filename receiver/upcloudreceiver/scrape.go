@@ -19,6 +19,11 @@ import (
 
 const instrumentationScopeName = "github.com/upcloud-community/opentelemetry-upcloud-receiver/receiver/upcloudreceiver"
 
+const (
+	resourceTypeManagedDatabase     = "managed_database"
+	resourceTypeManagedLoadBalancer = "managed_load_balancer"
+)
+
 func scrapeMetrics(ctx context.Context, client Client, cfg *Config, logger *zap.Logger) (pmetric.Metrics, error) {
 	out := pmetric.NewMetrics()
 	var errs []error
@@ -30,7 +35,7 @@ func scrapeMetrics(ctx context.Context, client Client, cfg *Config, logger *zap.
 				errs = append(errs, fmt.Errorf("managed database %s: %w", uuid, err))
 				continue
 			}
-			appendMetricsPayload(out, resp, "managed_database", uuid, cfg.ManagedDatabases.Metrics, logger)
+			appendMetricsPayload(out, resp, resourceTypeManagedDatabase, uuid, cfg.ManagedDatabases.Metrics, logger)
 		}
 	}
 
@@ -41,7 +46,7 @@ func scrapeMetrics(ctx context.Context, client Client, cfg *Config, logger *zap.
 				errs = append(errs, fmt.Errorf("managed load balancer %s: %w", uuid, err))
 				continue
 			}
-			appendMetricsPayload(out, resp, "managed_load_balancer", uuid, cfg.ManagedLoadBalancers.Metrics, logger)
+			appendMetricsPayload(out, resp, resourceTypeManagedLoadBalancer, uuid, cfg.ManagedLoadBalancers.Metrics, logger)
 		}
 	}
 
@@ -91,11 +96,12 @@ func appendMetric(metricKey string, metric MetricsItem, resourceType string, des
 	}
 
 	timestamp := extractTime(row[0])
+	descriptor := descriptorForMetric(resourceType, metricKey)
 
 	m := dest.AppendEmpty()
-	m.SetName(buildMetricName(resourceType, metricKey))
+	m.SetName(descriptor.Name)
 	m.SetDescription(metric.Hints.Title)
-	m.SetUnit("1")
+	m.SetUnit(descriptor.Unit)
 	m.SetEmptyGauge()
 	g := m.Gauge().DataPoints()
 
@@ -108,34 +114,17 @@ func appendMetric(metricKey string, metric MetricsItem, resourceType string, des
 			)
 			continue
 		}
+		value = descriptor.normalizeValue(value)
 
 		dp := g.AppendEmpty()
 		dp.SetTimestamp(pcommon.NewTimestampFromTime(timestamp))
 		dp.SetDoubleValue(value)
 		dp.Attributes().PutStr("upcloud.metric.name", metricKey)
 		dp.Attributes().PutStr("upcloud.series", metric.Data.Cols[idx].Label)
+		if descriptor.PercentToRatio {
+			dp.Attributes().PutStr("upcloud.value.normalization", "percent_to_ratio")
+		}
 	}
-}
-
-func buildMetricName(resourceType string, metricKey string) string {
-	sanitized := sanitizeMetricFragment(metricKey)
-	resource := sanitizeMetricFragment(resourceType)
-	return fmt.Sprintf("upcloud.%s.%s", resource, sanitized)
-}
-
-func sanitizeMetricFragment(s string) string {
-	if s == "" {
-		return "unknown"
-	}
-	replacer := strings.NewReplacer(
-		" ", "_",
-		"/", "_",
-		"\\", "_",
-		":", "_",
-		";", "_",
-		",", "_",
-	)
-	return replacer.Replace(strings.ToLower(s))
 }
 
 func extractTime(v any) time.Time {

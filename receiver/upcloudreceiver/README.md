@@ -25,6 +25,11 @@ upcloud:
   api:
     endpoint: https://api.upcloud.com
     token: ${env:UPCLOUD_API_TOKEN}
+    # Optional alternatives:
+    # token_file: /var/run/secrets/upcloud/token
+    # username: ${env:UPCLOUD_USERNAME}
+    # password: ${env:UPCLOUD_PASSWORD}
+    # password_file: /var/run/secrets/upcloud/password
     timeout: 10s
   managed_databases:
     enabled: true
@@ -39,12 +44,34 @@ upcloud:
     metrics_path_template: /1.3/load-balancer/{uuid}/metrics
 ```
 
+## Authentication
+
+Supported authentication modes:
+
+- Bearer token: `api.token` or `api.token_file`
+- Basic auth: `api.username` + (`api.password` or `api.password_file`)
+
+Rules:
+
+- Bearer and basic auth are mutually exclusive.
+- Inline and `_file` variants are mutually exclusive for the same secret.
+
 ## Metric naming
 
 Metrics are emitted as:
 
-- `upcloud.managed_database.<metric_key>`
-- `upcloud.managed_load_balancer.<metric_key>`
+- `upcloud.managed_database.<domain>.<name>`
+- `upcloud.managed_load_balancer.<domain>.<name>`
+
+Examples:
+
+- `upcloud.managed_database.cpu.utilization` (`unit=1`, normalized ratio)
+- `upcloud.managed_database.disk.io.read_operations` (`unit={operation}/s`)
+- `upcloud.managed_load_balancer.backend.connections` (`unit=1`)
+
+Receiver normalization:
+
+- `%` usage metrics are normalized from percentage values (`0..100`) to ratio (`0..1`) for `*.utilization` instruments.
 
 Resource and datapoint attributes include:
 

@@ -5,6 +5,7 @@ package upcloudreceiver
 
 import (
 	"context"
+	"math"
 	"testing"
 
 	"go.uber.org/zap"
@@ -69,11 +70,19 @@ func TestScrapeMetricsManagedDatabase(t *testing.T) {
 	}
 
 	m := sm.Metrics().At(0)
-	if m.Name() != "upcloud.managed_database.cpu_usage" {
+	if m.Name() != "upcloud.managed_database.cpu.utilization" {
 		t.Fatalf("unexpected metric name: %s", m.Name())
+	}
+	if m.Unit() != "1" {
+		t.Fatalf("unexpected metric unit: %s", m.Unit())
 	}
 
 	if m.Gauge().DataPoints().Len() != 2 {
 		t.Fatalf("expected 2 datapoints (primary + replica), got %d", m.Gauge().DataPoints().Len())
+	}
+
+	first := m.Gauge().DataPoints().At(0)
+	if math.Abs(first.DoubleValue()-0.022) > 0.0000001 {
+		t.Fatalf("expected normalized value 0.022, got %f", first.DoubleValue())
 	}
 }

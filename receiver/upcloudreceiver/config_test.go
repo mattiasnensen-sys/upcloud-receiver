@@ -29,11 +29,88 @@ func TestConfigValidate(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "valid token file auth",
+			cfg: Config{
+				CollectionInterval: 30,
+				InitialDelay:       1,
+				API: APIConfig{
+					Endpoint:  "https://api.upcloud.com",
+					TokenFile: "/tmp/upcloud-token",
+					Timeout:   10,
+				},
+				ManagedDatabases: ManagedDatabaseConfig{
+					Enabled: true,
+					UUIDs:   []string{"db-uuid"},
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "valid basic auth",
+			cfg: Config{
+				CollectionInterval: 30,
+				InitialDelay:       1,
+				API: APIConfig{
+					Endpoint: "https://api.upcloud.com",
+					Username: "user",
+					Password: "pass",
+					Timeout:  10,
+				},
+				ManagedDatabases: ManagedDatabaseConfig{
+					Enabled: true,
+					UUIDs:   []string{"db-uuid"},
+				},
+			},
+			wantErr: false,
+		},
+		{
 			name: "missing token",
 			cfg: Config{
 				CollectionInterval: 30,
 				API: APIConfig{
 					Endpoint: "https://api.upcloud.com",
+					Timeout:  10,
+				},
+				ManagedDatabases: ManagedDatabaseConfig{Enabled: true, UUIDs: []string{"db-uuid"}},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid both token and token file",
+			cfg: Config{
+				CollectionInterval: 30,
+				API: APIConfig{
+					Endpoint:  "https://api.upcloud.com",
+					Token:     "token",
+					TokenFile: "/tmp/upcloud-token",
+					Timeout:   10,
+				},
+				ManagedDatabases: ManagedDatabaseConfig{Enabled: true, UUIDs: []string{"db-uuid"}},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid bearer and basic mixed",
+			cfg: Config{
+				CollectionInterval: 30,
+				API: APIConfig{
+					Endpoint: "https://api.upcloud.com",
+					Token:    "token",
+					Username: "user",
+					Password: "pass",
+					Timeout:  10,
+				},
+				ManagedDatabases: ManagedDatabaseConfig{Enabled: true, UUIDs: []string{"db-uuid"}},
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid basic missing username",
+			cfg: Config{
+				CollectionInterval: 30,
+				API: APIConfig{
+					Endpoint: "https://api.upcloud.com",
+					Password: "pass",
 					Timeout:  10,
 				},
 				ManagedDatabases: ManagedDatabaseConfig{Enabled: true, UUIDs: []string{"db-uuid"}},

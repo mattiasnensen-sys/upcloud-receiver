@@ -1,0 +1,31 @@
+{
+  "cpu_usage": {
+    "data": {
+      "cols": [
+        {"label": "time", "type": "date"},
+        {"label": "db-primary", "type": "number"},
+        {"label": "db-replica", "type": "number"}
+      ],
+      "rows": [
+        ["2026-02-21T09:30:00Z", 31.5, 29.2]
+      ]
+    },
+    "hints": {
+      "title": "CPU usage %"
+    }
+  },
+  "diskio_reads": {
+    "data": {
+      "cols": [
+        {"label": "time", "type": "date"},
+        {"label": "db-primary", "type": "number"}
+      ],
+      "rows": [
+        ["2026-02-21T09:30:00Z", 42]
+      ]
+    },
+    "hints": {
+      "title": "Disk iops (reads)"
+    }
+  }
+}

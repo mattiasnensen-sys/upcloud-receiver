@@ -13,9 +13,17 @@ properties:
         type: string
       token:
         type: string
+      token_file:
+        type: string
+      username:
+        type: string
+      password:
+        type: string
+      password_file:
+        type: string
       timeout:
         type: string
-    required: [endpoint, token]
+    required: [endpoint]
   managed_databases:
     type: object
     additionalProperties: false
