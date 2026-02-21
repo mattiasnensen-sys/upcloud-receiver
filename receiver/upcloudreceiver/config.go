@@ -17,8 +17,8 @@ const (
 	defaultCollectionInterval           = 60 * time.Second
 	defaultInitialDelay                 = 1 * time.Second
 	defaultAPITimeout                   = 10 * time.Second
-	defaultManagedDatabasePeriod        = "5m"
-	defaultManagedLoadBalancerPeriod    = "5m"
+	defaultManagedDatabasePeriod        = "hour"
+	defaultManagedLoadBalancerPeriod    = "hour"
 	defaultManagedDatabaseDiscovery     = "/1.3/database"
 	defaultManagedLoadBalancerDiscovery = "/1.3/load-balancer"
 	defaultDiscoveryLimit               = 100
@@ -95,6 +95,9 @@ func (cfg *Config) Validate() error {
 	if cfg.ManagedDatabases.Enabled && len(cfg.ManagedDatabases.UUIDs) == 0 && !cfg.ManagedDatabases.AutoDiscover {
 		return fmt.Errorf("managed_databases requires uuids or auto_discover=true")
 	}
+	if cfg.ManagedDatabases.Enabled && !isValidManagedDatabasePeriod(cfg.ManagedDatabases.Period) {
+		return fmt.Errorf("managed_databases.period must be one of: hour, day, week, month, year")
+	}
 	if cfg.ManagedDatabases.AutoDiscover && strings.TrimSpace(cfg.ManagedDatabases.DiscoveryPath) == "" {
 		return fmt.Errorf("managed_databases.discovery_path is required when auto_discover=true")
 	}
@@ -111,6 +114,19 @@ func (cfg *Config) Validate() error {
 		return fmt.Errorf("managed_load_balancers.metrics_path_template must contain {uuid}")
 	}
 	return nil
+}
+
+func isValidManagedDatabasePeriod(period string) bool {
+	normalized := strings.TrimSpace(strings.ToLower(period))
+	if normalized == "" {
+		return true
+	}
+	switch normalized {
+	case "hour", "day", "week", "month", "year":
+		return true
+	default:
+		return false
+	}
 }
 
 // Validate validates API configuration.

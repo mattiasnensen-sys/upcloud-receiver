@@ -129,6 +129,58 @@ func TestHTTPClientIntegration_ListManagedLoadBalancerUUIDs(t *testing.T) {
 	}
 }
 
+func TestHTTPClientIntegration_LoadBalancerSnapshotConversion(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/1.3/load-balancer/lb-uuid/metrics" {
+			t.Fatalf("unexpected path: %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"frontends": []map[string]any{
+				{
+					"name":                "https-443",
+					"updated_at":          "2026-02-21T12:01:47.746303Z",
+					"total_http_requests": 12,
+					"request_rate":        2,
+				},
+			},
+			"backends": []map[string]any{
+				{
+					"name":                "api-backend",
+					"updated_at":          "2026-02-21T12:01:47.746303Z",
+					"current_sessions":    3,
+					"total_request_bytes": 1024,
+				},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewHTTPClient(APIConfig{
+		Endpoint: server.URL,
+		Token:    "fixture-token",
+		Timeout:  2 * time.Second,
+	}, "/1.3/load-balancer/{uuid}/metrics")
+	if err != nil {
+		t.Fatalf("new http client: %v", err)
+	}
+
+	metrics, err := client.GetManagedLoadBalancerMetrics(context.Background(), "lb-uuid", "hour")
+	if err != nil {
+		t.Fatalf("get managed load balancer metrics: %v", err)
+	}
+
+	if len(metrics) == 0 {
+		t.Fatalf("expected converted metrics from load balancer snapshot")
+	}
+	if _, ok := metrics["frontend.total_http_requests"]; !ok {
+		t.Fatalf("expected frontend.total_http_requests metric key")
+	}
+	if _, ok := metrics["backend.current_sessions"]; !ok {
+		t.Fatalf("expected backend.current_sessions metric key")
+	}
+}
+
 func TestHTTPClientIntegration_BasicAuthFromPasswordFile(t *testing.T) {
 	passwordFile := filepath.Join(t.TempDir(), "password")
 	if err := os.WriteFile(passwordFile, []byte("fixture-password\n"), 0o600); err != nil {

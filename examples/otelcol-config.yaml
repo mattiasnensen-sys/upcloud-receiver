@@ -19,7 +19,7 @@ receivers:
       #   - 00000000-0000-0000-0000-000000000000
       # exclude_uuids:
       #   - 00000000-0000-0000-0000-000000000099
-      period: 5m
+      period: hour
     managed_load_balancers:
       enabled: true
       auto_discover: true
@@ -28,7 +28,7 @@ receivers:
       #   - 00000000-0000-0000-0000-000000000001
       # exclude_uuids:
       #   - 00000000-0000-0000-0000-000000000199
-      period: 5m
+      period: hour
       metrics_path_template: /1.3/load-balancer/{uuid}/metrics
 
 processors:

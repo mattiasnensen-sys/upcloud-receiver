@@ -127,17 +127,23 @@ func (c *httpClient) getMetrics(ctx context.Context, endpointPath string, period
 	if err != nil {
 		return nil, err
 	}
-
-	serialized, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("marshal metrics response: %w", err)
+	parsed, err := decodeMetricsResponse(payload)
+	if err == nil {
+		return parsed, nil
 	}
 
-	var parsed MetricsResponse
-	if err := json.Unmarshal(serialized, &parsed); err != nil {
-		return nil, fmt.Errorf("unmarshal metrics response: %w", err)
+	// Managed load balancer metrics may be returned as snapshot structures instead of
+	// timeseries map payloads. Convert snapshot payloads into timeseries-compatible
+	// metrics so the receiver pipeline can emit gauges consistently.
+	if strings.Contains(endpointPath, "/load-balancer/") {
+		converted, convErr := convertLoadBalancerSnapshotToMetricsResponse(payload)
+		if convErr == nil {
+			return converted, nil
+		}
+		return nil, fmt.Errorf("unmarshal metrics response: %w; load balancer conversion failed: %v", err, convErr)
 	}
-	return parsed, nil
+
+	return nil, fmt.Errorf("unmarshal metrics response: %w", err)
 }
 
 func (c *httpClient) getJSON(ctx context.Context, endpointPath string, query url.Values) (any, http.Header, error) {
@@ -328,4 +334,150 @@ func dedupeSorted(values []string) []string {
 		out = append(out, values[i])
 	}
 	return out
+}
+
+func decodeMetricsResponse(payload any) (MetricsResponse, error) {
+	serialized, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal metrics response: %w", err)
+	}
+
+	var parsed MetricsResponse
+	if err := json.Unmarshal(serialized, &parsed); err != nil {
+		return nil, err
+	}
+	return parsed, nil
+}
+
+func convertLoadBalancerSnapshotToMetricsResponse(payload any) (MetricsResponse, error) {
+	root, ok := payload.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("snapshot payload is not an object")
+	}
+
+	type seriesBucket struct {
+		timestamp time.Time
+		values    map[string]float64
+	}
+
+	buckets := make(map[string]*seriesBucket)
+	addMetric := func(metricKey, series string, value float64, ts time.Time) {
+		bucket, exists := buckets[metricKey]
+		if !exists {
+			bucket = &seriesBucket{
+				timestamp: nowTimestamp(ts),
+				values:    make(map[string]float64),
+			}
+			buckets[metricKey] = bucket
+		}
+		if ts.After(bucket.timestamp) {
+			bucket.timestamp = ts
+		}
+		bucket.values[series] = value
+	}
+
+	processObject := func(metricPrefix, series string, obj map[string]any) {
+		ts := parseUpdatedAt(obj["updated_at"])
+		for key, raw := range obj {
+			value, ok := toFloat64(raw)
+			if !ok {
+				continue
+			}
+			metricKey := metricPrefix + "." + key
+			addMetric(metricKey, series, value, ts)
+		}
+	}
+
+	frontends, _ := root["frontends"].([]any)
+	for idx, item := range frontends {
+		obj, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := obj["name"].(string)
+		if strings.TrimSpace(name) == "" {
+			name = fmt.Sprintf("frontend-%d", idx)
+		}
+		series := "frontend:" + name
+		processObject("frontend", series, obj)
+	}
+
+	backends, _ := root["backends"].([]any)
+	for idx, item := range backends {
+		obj, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := obj["name"].(string)
+		if strings.TrimSpace(name) == "" {
+			name = fmt.Sprintf("backend-%d", idx)
+		}
+		series := "backend:" + name
+		processObject("backend", series, obj)
+
+		members, _ := obj["members"].([]any)
+		for mIdx, memberItem := range members {
+			member, ok := memberItem.(map[string]any)
+			if !ok {
+				continue
+			}
+			memberName, _ := member["name"].(string)
+			if strings.TrimSpace(memberName) == "" {
+				memberName = fmt.Sprintf("member-%d", mIdx)
+			}
+			memberSeries := series + "/member:" + memberName
+			processObject("backend.member", memberSeries, member)
+		}
+	}
+
+	if len(buckets) == 0 {
+		return nil, fmt.Errorf("no numeric load balancer metrics discovered")
+	}
+
+	response := make(MetricsResponse, len(buckets))
+	for metricKey, bucket := range buckets {
+		seriesNames := make([]string, 0, len(bucket.values))
+		for series := range bucket.values {
+			seriesNames = append(seriesNames, series)
+		}
+		sort.Strings(seriesNames)
+
+		cols := make([]MetricsColumn, 0, len(seriesNames)+1)
+		cols = append(cols, MetricsColumn{Label: "time", Type: "date"})
+		row := make([]any, 0, len(seriesNames)+1)
+		row = append(row, bucket.timestamp.Format(time.RFC3339))
+		for _, series := range seriesNames {
+			cols = append(cols, MetricsColumn{Label: series, Type: "number"})
+			row = append(row, bucket.values[series])
+		}
+
+		response[metricKey] = MetricsItem{
+			Data: MetricsData{
+				Cols: cols,
+				Rows: [][]any{row},
+			},
+			Hints: MetricsHints{
+				Title: strings.ReplaceAll(metricKey, "_", " "),
+			},
+		}
+	}
+	return response, nil
+}
+
+func parseUpdatedAt(raw any) time.Time {
+	s, ok := raw.(string)
+	if !ok {
+		return nowTimestamp(time.Time{})
+	}
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nowTimestamp(time.Time{})
+	}
+	if ts, err := time.Parse(time.RFC3339Nano, s); err == nil {
+		return ts.UTC()
+	}
+	if ts, err := time.Parse(time.RFC3339, s); err == nil {
+		return ts.UTC()
+	}
+	return nowTimestamp(time.Time{})
 }

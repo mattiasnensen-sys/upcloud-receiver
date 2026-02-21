@@ -198,6 +198,21 @@ func TestConfigValidate(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "invalid managed database period",
+			cfg: Config{
+				CollectionInterval: 30,
+				API:                APIConfig{Endpoint: "https://api.upcloud.com", Token: "token", Timeout: 10},
+				ManagedDatabases: ManagedDatabaseConfig{
+					Enabled:        true,
+					AutoDiscover:   true,
+					DiscoveryPath:  defaultManagedDatabaseDiscovery,
+					DiscoveryLimit: defaultDiscoveryLimit,
+					Period:         "5m",
+				},
+			},
+			wantErr: true,
+		},
+		{
 			name: "invalid load balancer template",
 			cfg: Config{
 				CollectionInterval: 30,

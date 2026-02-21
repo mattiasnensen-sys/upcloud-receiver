@@ -38,7 +38,7 @@ upcloud:
     discovery_limit: 100
     uuids: ["00000000-0000-0000-0000-000000000000"] # optional explicit add-ons
     exclude_uuids: ["00000000-0000-0000-0000-000000000099"] # optional
-    period: 5m
+    period: hour
     metrics: []
   managed_load_balancers:
     enabled: true
@@ -46,7 +46,7 @@ upcloud:
     discovery_path: /1.3/load-balancer
     uuids: [] # optional explicit add-ons
     exclude_uuids: [] # optional
-    period: 5m
+    period: hour
     metrics: []
     metrics_path_template: /1.3/load-balancer/{uuid}/metrics
 ```
