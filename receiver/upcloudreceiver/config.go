@@ -13,13 +13,16 @@ import (
 )
 
 const (
-	defaultAPIEndpoint                 = "https://api.upcloud.com"
-	defaultCollectionInterval          = 60 * time.Second
-	defaultInitialDelay                = 1 * time.Second
-	defaultAPITimeout                  = 10 * time.Second
-	defaultManagedDatabasePeriod       = "5m"
-	defaultManagedLoadBalancerPeriod   = "5m"
-	defaultLoadBalancerMetricsTemplate = "/1.3/load-balancer/{uuid}/metrics"
+	defaultAPIEndpoint                  = "https://api.upcloud.com"
+	defaultCollectionInterval           = 60 * time.Second
+	defaultInitialDelay                 = 1 * time.Second
+	defaultAPITimeout                   = 10 * time.Second
+	defaultManagedDatabasePeriod        = "5m"
+	defaultManagedLoadBalancerPeriod    = "5m"
+	defaultManagedDatabaseDiscovery     = "/1.3/database"
+	defaultManagedLoadBalancerDiscovery = "/1.3/load-balancer"
+	defaultDiscoveryLimit               = 100
+	defaultLoadBalancerMetricsTemplate  = "/1.3/load-balancer/{uuid}/metrics"
 )
 
 // Config defines the upcloud receiver settings.
@@ -44,16 +47,23 @@ type APIConfig struct {
 
 // ManagedDatabaseConfig configures database metrics scraping.
 type ManagedDatabaseConfig struct {
-	Enabled bool     `mapstructure:"enabled"`
-	UUIDs   []string `mapstructure:"uuids"`
-	Period  string   `mapstructure:"period"`
-	Metrics []string `mapstructure:"metrics"`
+	Enabled        bool     `mapstructure:"enabled"`
+	UUIDs          []string `mapstructure:"uuids"`
+	AutoDiscover   bool     `mapstructure:"auto_discover"`
+	DiscoveryPath  string   `mapstructure:"discovery_path"`
+	DiscoveryLimit int      `mapstructure:"discovery_limit"`
+	ExcludeUUIDs   []string `mapstructure:"exclude_uuids"`
+	Period         string   `mapstructure:"period"`
+	Metrics        []string `mapstructure:"metrics"`
 }
 
 // ManagedLoadBalancerConfig configures load balancer metrics scraping.
 type ManagedLoadBalancerConfig struct {
 	Enabled             bool     `mapstructure:"enabled"`
 	UUIDs               []string `mapstructure:"uuids"`
+	AutoDiscover        bool     `mapstructure:"auto_discover"`
+	DiscoveryPath       string   `mapstructure:"discovery_path"`
+	ExcludeUUIDs        []string `mapstructure:"exclude_uuids"`
 	Period              string   `mapstructure:"period"`
 	Metrics             []string `mapstructure:"metrics"`
 	MetricsPathTemplate string   `mapstructure:"metrics_path_template"`
@@ -82,11 +92,20 @@ func (cfg *Config) Validate() error {
 	if !cfg.ManagedDatabases.Enabled && !cfg.ManagedLoadBalancers.Enabled {
 		return fmt.Errorf("at least one managed service block must be enabled")
 	}
-	if cfg.ManagedDatabases.Enabled && len(cfg.ManagedDatabases.UUIDs) == 0 {
-		return fmt.Errorf("managed_databases.uuids must be set when managed_databases.enabled=true")
+	if cfg.ManagedDatabases.Enabled && len(cfg.ManagedDatabases.UUIDs) == 0 && !cfg.ManagedDatabases.AutoDiscover {
+		return fmt.Errorf("managed_databases requires uuids or auto_discover=true")
 	}
-	if cfg.ManagedLoadBalancers.Enabled && len(cfg.ManagedLoadBalancers.UUIDs) == 0 {
-		return fmt.Errorf("managed_load_balancers.uuids must be set when managed_load_balancers.enabled=true")
+	if cfg.ManagedDatabases.AutoDiscover && strings.TrimSpace(cfg.ManagedDatabases.DiscoveryPath) == "" {
+		return fmt.Errorf("managed_databases.discovery_path is required when auto_discover=true")
+	}
+	if cfg.ManagedDatabases.AutoDiscover && cfg.ManagedDatabases.DiscoveryLimit <= 0 {
+		return fmt.Errorf("managed_databases.discovery_limit must be > 0 when auto_discover=true")
+	}
+	if cfg.ManagedLoadBalancers.Enabled && len(cfg.ManagedLoadBalancers.UUIDs) == 0 && !cfg.ManagedLoadBalancers.AutoDiscover {
+		return fmt.Errorf("managed_load_balancers requires uuids or auto_discover=true")
+	}
+	if cfg.ManagedLoadBalancers.AutoDiscover && strings.TrimSpace(cfg.ManagedLoadBalancers.DiscoveryPath) == "" {
+		return fmt.Errorf("managed_load_balancers.discovery_path is required when auto_discover=true")
 	}
 	if cfg.ManagedLoadBalancers.Enabled && !strings.Contains(cfg.ManagedLoadBalancers.MetricsPathTemplate, "{uuid}") {
 		return fmt.Errorf("managed_load_balancers.metrics_path_template must contain {uuid}")

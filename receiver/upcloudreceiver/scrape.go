@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -29,7 +30,11 @@ func scrapeMetrics(ctx context.Context, client Client, cfg *Config, logger *zap.
 	var errs []error
 
 	if cfg.ManagedDatabases.Enabled {
-		for _, uuid := range cfg.ManagedDatabases.UUIDs {
+		targetUUIDs, err := resolveManagedDatabaseUUIDs(ctx, client, cfg.ManagedDatabases)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		for _, uuid := range targetUUIDs {
 			resp, err := client.GetManagedDatabaseMetrics(ctx, uuid, cfg.ManagedDatabases.Period)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("managed database %s: %w", uuid, err))
@@ -40,7 +45,11 @@ func scrapeMetrics(ctx context.Context, client Client, cfg *Config, logger *zap.
 	}
 
 	if cfg.ManagedLoadBalancers.Enabled {
-		for _, uuid := range cfg.ManagedLoadBalancers.UUIDs {
+		targetUUIDs, err := resolveManagedLoadBalancerUUIDs(ctx, client, cfg.ManagedLoadBalancers)
+		if err != nil {
+			errs = append(errs, err)
+		}
+		for _, uuid := range targetUUIDs {
 			resp, err := client.GetManagedLoadBalancerMetrics(ctx, uuid, cfg.ManagedLoadBalancers.Period)
 			if err != nil {
 				errs = append(errs, fmt.Errorf("managed load balancer %s: %w", uuid, err))
@@ -185,4 +194,54 @@ func toFloat64(v any) (float64, bool) {
 	default:
 		return 0, false
 	}
+}
+
+func resolveManagedDatabaseUUIDs(ctx context.Context, client Client, cfg ManagedDatabaseConfig) ([]string, error) {
+	targets := append([]string(nil), cfg.UUIDs...)
+	if cfg.AutoDiscover {
+		discovered, err := client.ListManagedDatabaseServiceUUIDs(ctx, cfg.DiscoveryPath, cfg.DiscoveryLimit)
+		if err != nil {
+			return applyExcludeUUIDs(targets, cfg.ExcludeUUIDs), fmt.Errorf("discover managed databases: %w", err)
+		}
+		targets = append(targets, discovered...)
+	}
+	return applyExcludeUUIDs(targets, cfg.ExcludeUUIDs), nil
+}
+
+func resolveManagedLoadBalancerUUIDs(ctx context.Context, client Client, cfg ManagedLoadBalancerConfig) ([]string, error) {
+	targets := append([]string(nil), cfg.UUIDs...)
+	if cfg.AutoDiscover {
+		discovered, err := client.ListManagedLoadBalancerUUIDs(ctx, cfg.DiscoveryPath)
+		if err != nil {
+			return applyExcludeUUIDs(targets, cfg.ExcludeUUIDs), fmt.Errorf("discover managed load balancers: %w", err)
+		}
+		targets = append(targets, discovered...)
+	}
+	return applyExcludeUUIDs(targets, cfg.ExcludeUUIDs), nil
+}
+
+func applyExcludeUUIDs(targets []string, exclude []string) []string {
+	targets = dedupe(targets)
+	if len(targets) == 0 {
+		return targets
+	}
+
+	excluded := make(map[string]struct{}, len(exclude))
+	for _, id := range exclude {
+		trimmed := strings.TrimSpace(id)
+		if trimmed == "" {
+			continue
+		}
+		excluded[trimmed] = struct{}{}
+	}
+
+	filtered := make([]string, 0, len(targets))
+	for _, id := range targets {
+		if _, skip := excluded[id]; skip {
+			continue
+		}
+		filtered = append(filtered, id)
+	}
+	sort.Strings(filtered)
+	return filtered
 }

@@ -14,6 +14,8 @@ import (
 type fakeClient struct {
 	dbResp MetricsResponse
 	lbResp MetricsResponse
+	dbList []string
+	lbList []string
 }
 
 func (f *fakeClient) GetManagedDatabaseMetrics(context.Context, string, string) (MetricsResponse, error) {
@@ -22,6 +24,14 @@ func (f *fakeClient) GetManagedDatabaseMetrics(context.Context, string, string) 
 
 func (f *fakeClient) GetManagedLoadBalancerMetrics(context.Context, string, string) (MetricsResponse, error) {
 	return f.lbResp, nil
+}
+
+func (f *fakeClient) ListManagedDatabaseServiceUUIDs(context.Context, string, int) ([]string, error) {
+	return f.dbList, nil
+}
+
+func (f *fakeClient) ListManagedLoadBalancerUUIDs(context.Context, string) ([]string, error) {
+	return f.lbList, nil
 }
 
 func TestScrapeMetricsManagedDatabase(t *testing.T) {
@@ -84,5 +94,51 @@ func TestScrapeMetricsManagedDatabase(t *testing.T) {
 	first := m.Gauge().DataPoints().At(0)
 	if math.Abs(first.DoubleValue()-0.022) > 0.0000001 {
 		t.Fatalf("expected normalized value 0.022, got %f", first.DoubleValue())
+	}
+}
+
+func TestScrapeMetricsAutoDiscoverManagedDatabase(t *testing.T) {
+	cfg := &Config{
+		CollectionInterval: 60,
+		InitialDelay:       0,
+		API:                APIConfig{Endpoint: "https://api.upcloud.com", Token: "token", Timeout: 10},
+		ManagedDatabases: ManagedDatabaseConfig{
+			Enabled:        true,
+			AutoDiscover:   true,
+			DiscoveryPath:  "/1.3/database",
+			DiscoveryLimit: 100,
+			ExcludeUUIDs:   []string{"db-2"},
+			Period:         "5m",
+		},
+	}
+
+	client := &fakeClient{
+		dbList: []string{"db-1", "db-2"},
+		dbResp: MetricsResponse{
+			"cpu_usage": {
+				Hints: MetricsHints{Title: "CPU usage %"},
+				Data: MetricsData{
+					Cols: []MetricsColumn{
+						{Label: "time", Type: "date"},
+						{Label: "primary", Type: "number"},
+					},
+					Rows: [][]any{
+						{"2026-02-21T08:00:00Z", 10.0},
+					},
+				},
+			},
+		},
+	}
+
+	metrics, err := scrapeMetrics(context.Background(), client, cfg, zap.NewNop())
+	if err != nil {
+		t.Fatalf("unexpected scrape error: %v", err)
+	}
+	if metrics.ResourceMetrics().Len() != 1 {
+		t.Fatalf("expected 1 resource metric after exclusion, got %d", metrics.ResourceMetrics().Len())
+	}
+	rm := metrics.ResourceMetrics().At(0)
+	if got := rm.Resource().Attributes().AsRaw()["upcloud.resource.uuid"]; got != "db-1" {
+		t.Fatalf("unexpected discovered uuid: %v", got)
 	}
 }

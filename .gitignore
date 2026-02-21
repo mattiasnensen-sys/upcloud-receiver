@@ -5,6 +5,7 @@ dist/
 *.test
 *.out
 coverage.txt
+.env
 
 # Go
 vendor/

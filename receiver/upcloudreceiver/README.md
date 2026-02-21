@@ -33,12 +33,19 @@ upcloud:
     timeout: 10s
   managed_databases:
     enabled: true
-    uuids: ["00000000-0000-0000-0000-000000000000"]
+    auto_discover: true
+    discovery_path: /1.3/database
+    discovery_limit: 100
+    uuids: ["00000000-0000-0000-0000-000000000000"] # optional explicit add-ons
+    exclude_uuids: ["00000000-0000-0000-0000-000000000099"] # optional
     period: 5m
     metrics: []
   managed_load_balancers:
-    enabled: false
-    uuids: []
+    enabled: true
+    auto_discover: true
+    discovery_path: /1.3/load-balancer
+    uuids: [] # optional explicit add-ons
+    exclude_uuids: [] # optional
     period: 5m
     metrics: []
     metrics_path_template: /1.3/load-balancer/{uuid}/metrics
@@ -55,6 +62,20 @@ Rules:
 
 - Bearer and basic auth are mutually exclusive.
 - Inline and `_file` variants are mutually exclusive for the same secret.
+
+## Autodiscovery
+
+Each resource block supports:
+
+- `auto_discover`: discover resource UUIDs from the list endpoint.
+- `uuids`: explicit UUIDs to include in addition to discovered UUIDs.
+- `exclude_uuids`: UUIDs to remove from the final target set.
+
+Resolution order per scrape:
+
+1. Start with explicit `uuids`
+2. Add discovered UUIDs when `auto_discover=true`
+3. Apply `exclude_uuids`
 
 ## Metric naming
 

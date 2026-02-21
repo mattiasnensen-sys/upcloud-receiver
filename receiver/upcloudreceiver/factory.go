@@ -31,12 +31,17 @@ func createDefaultConfig() component.Config {
 			Timeout:  defaultAPITimeout,
 		},
 		ManagedDatabases: ManagedDatabaseConfig{
-			Enabled: true,
-			Period:  defaultManagedDatabasePeriod,
+			Enabled:        true,
+			Period:         defaultManagedDatabasePeriod,
+			AutoDiscover:   true,
+			DiscoveryPath:  defaultManagedDatabaseDiscovery,
+			DiscoveryLimit: defaultDiscoveryLimit,
 		},
 		ManagedLoadBalancers: ManagedLoadBalancerConfig{
 			Enabled:             false,
 			Period:              defaultManagedLoadBalancerPeriod,
+			AutoDiscover:        false,
+			DiscoveryPath:       defaultManagedLoadBalancerDiscovery,
 			MetricsPathTemplate: defaultLoadBalancerMetricsTemplate,
 		},
 	}

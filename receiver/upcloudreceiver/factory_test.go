@@ -16,4 +16,7 @@ func TestCreateDefaultConfig(t *testing.T) {
 	if !cfg.ManagedDatabases.Enabled {
 		t.Fatalf("managed_databases should be enabled by default")
 	}
+	if !cfg.ManagedDatabases.AutoDiscover {
+		t.Fatalf("managed_databases auto_discover should be enabled by default")
+	}
 }

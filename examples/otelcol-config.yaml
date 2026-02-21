@@ -12,13 +12,22 @@ receivers:
       timeout: 10s
     managed_databases:
       enabled: true
-      uuids:
-        - 00000000-0000-0000-0000-000000000000
+      auto_discover: true
+      discovery_path: /1.3/database
+      discovery_limit: 100
+      # uuids:
+      #   - 00000000-0000-0000-0000-000000000000
+      # exclude_uuids:
+      #   - 00000000-0000-0000-0000-000000000099
       period: 5m
     managed_load_balancers:
       enabled: true
-      uuids:
-        - 00000000-0000-0000-0000-000000000001
+      auto_discover: true
+      discovery_path: /1.3/load-balancer
+      # uuids:
+      #   - 00000000-0000-0000-0000-000000000001
+      # exclude_uuids:
+      #   - 00000000-0000-0000-0000-000000000199
       period: 5m
       metrics_path_template: /1.3/load-balancer/{uuid}/metrics
 

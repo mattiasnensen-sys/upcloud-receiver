@@ -5,6 +5,7 @@ package upcloudreceiver
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -51,6 +52,80 @@ func TestHTTPClientIntegration_BearerTokenFromFile(t *testing.T) {
 
 	if _, err := client.GetManagedDatabaseMetrics(context.Background(), "db-uuid", "5m"); err != nil {
 		t.Fatalf("get managed database metrics: %v", err)
+	}
+}
+
+func TestHTTPClientIntegration_ListManagedDatabaseServiceUUIDs(t *testing.T) {
+	var calls []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/1.3/database" {
+			t.Fatalf("unexpected path: %q", r.URL.Path)
+		}
+		calls = append(calls, r.URL.RawQuery)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Query().Get("offset") {
+		case "0":
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"uuid": "db-1"},
+				{"uuid": "db-2"},
+			})
+		default:
+			_ = json.NewEncoder(w).Encode([]map[string]any{})
+		}
+	}))
+	defer server.Close()
+
+	client, err := NewHTTPClient(APIConfig{
+		Endpoint: server.URL,
+		Token:    "fixture-token",
+		Timeout:  2 * time.Second,
+	}, defaultLoadBalancerMetricsTemplate)
+	if err != nil {
+		t.Fatalf("new http client: %v", err)
+	}
+
+	ids, err := client.ListManagedDatabaseServiceUUIDs(context.Background(), "/1.3/database", 2)
+	if err != nil {
+		t.Fatalf("list managed database uuids: %v", err)
+	}
+	if len(ids) != 2 || ids[0] != "db-1" || ids[1] != "db-2" {
+		t.Fatalf("unexpected discovered ids: %v", ids)
+	}
+	if len(calls) != 2 {
+		t.Fatalf("expected two paginated calls, got %d", len(calls))
+	}
+}
+
+func TestHTTPClientIntegration_ListManagedLoadBalancerUUIDs(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/1.3/load-balancer" {
+			t.Fatalf("unexpected path: %q", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"load_balancers": []map[string]any{
+				{"uuid": "lb-2"},
+				{"uuid": "lb-1"},
+			},
+		})
+	}))
+	defer server.Close()
+
+	client, err := NewHTTPClient(APIConfig{
+		Endpoint: server.URL,
+		Token:    "fixture-token",
+		Timeout:  2 * time.Second,
+	}, defaultLoadBalancerMetricsTemplate)
+	if err != nil {
+		t.Fatalf("new http client: %v", err)
+	}
+
+	ids, err := client.ListManagedLoadBalancerUUIDs(context.Background(), "/1.3/load-balancer")
+	if err != nil {
+		t.Fatalf("list managed load balancer uuids: %v", err)
+	}
+	if len(ids) != 2 || ids[0] != "lb-1" || ids[1] != "lb-2" {
+		t.Fatalf("unexpected discovered ids: %v", ids)
 	}
 }
 
@@ -162,6 +237,73 @@ func TestScrapeMetricsIntegration_DatabaseAndLoadBalancer(t *testing.T) {
 		if names[i] != want[i] {
 			t.Fatalf("unexpected metric names: got=%v want=%v", names, want)
 		}
+	}
+}
+
+func TestScrapeMetricsIntegration_AutoDiscover(t *testing.T) {
+	dbFixture := mustReadFixture(t, "testdata/integration/managed_database_metrics.json")
+	lbFixture := mustReadFixture(t, "testdata/integration/managed_load_balancer_metrics.json")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/1.3/database":
+			_ = json.NewEncoder(w).Encode([]map[string]any{
+				{"uuid": "db-uuid"},
+			})
+		case "/1.3/load-balancer":
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"load_balancers": []map[string]any{
+					{"uuid": "lb-uuid"},
+				},
+			})
+		case "/1.3/database/db-uuid/metrics":
+			_, _ = w.Write(dbFixture)
+		case "/1.3/load-balancer/lb-uuid/metrics":
+			_, _ = w.Write(lbFixture)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	cfg := &Config{
+		CollectionInterval: 10 * time.Second,
+		InitialDelay:       0,
+		API: APIConfig{
+			Endpoint: server.URL,
+			Token:    "fixture-token",
+			Timeout:  2 * time.Second,
+		},
+		ManagedDatabases: ManagedDatabaseConfig{
+			Enabled:        true,
+			AutoDiscover:   true,
+			DiscoveryPath:  "/1.3/database",
+			DiscoveryLimit: 100,
+			Period:         "5m",
+		},
+		ManagedLoadBalancers: ManagedLoadBalancerConfig{
+			Enabled:             true,
+			AutoDiscover:        true,
+			DiscoveryPath:       "/1.3/load-balancer",
+			Period:              "5m",
+			MetricsPathTemplate: "/1.3/load-balancer/{uuid}/metrics",
+		},
+	}
+
+	client, err := NewHTTPClient(cfg.API, cfg.ManagedLoadBalancers.MetricsPathTemplate)
+	if err != nil {
+		t.Fatalf("new http client: %v", err)
+	}
+
+	metrics, err := scrapeMetrics(context.Background(), client, cfg, zap.NewNop())
+	if err != nil {
+		t.Fatalf("scrape metrics: %v", err)
+	}
+
+	names := allMetricNames(metrics)
+	if len(names) == 0 {
+		t.Fatalf("expected discovered metrics")
 	}
 }
 
